@@ -1,7 +1,8 @@
 """
 Reports Tool for Kocard
-Version: 0.1.3
+Version: 1.0.1
 Author: ZessO
+Contact: ryanzhao0708@163.com
 """
 import copy
 import re
@@ -16,7 +17,6 @@ from reportlab.lib import colors
 import tkinter
 from tkinter import filedialog
 
-#TTF字体注册
 pdfmetrics.registerFont(TTFont('Menlo', 'Menlo-Pingfang.ttf'))
 
 #GUI
@@ -45,15 +45,18 @@ entry_text = tkinter.StringVar()
 entry = tkinter.Entry(root, textvariable=entry_text, font=('', 10), width=30, state='readonly')
 entry.place(x=0, y=140, width=250, height=25)
 
+#MHL选择
 def getPath():
     path = filedialog.askopenfilenames(title='请选择MHL文件')
     entry_text.set(path)
 
+#获取文本框内容
 def getTextInput(textName):
-    result = textName.get()    #获取文本输入框的内容
+    result = textName.get()
     return result
 
 def genReport():
+    #路径获取与处理
     allPath = getTextInput(entry_text)
     allPath = allPath.strip('()')
     pathList = allPath.split()
@@ -61,14 +64,12 @@ def genReport():
     for i in range(0, path_num):
         pathList[i] = pathList[i].strip(',')
         pathList[i] = pathList[i].strip("'")
-    # print(projectPath)
 
     projectTitle = getTextInput(titleEntry)
     backups = getTextInput(nameEntry)
 
     if path_num == 0:
         tkinter.messagebox.showinfo(title='提示', message='未检测到路径！')
-        exit()
     else:
         for i in range(path_num):
             projectPath = pathList[i]
@@ -77,62 +78,48 @@ def genReport():
                 tkinter.messagebox.showinfo(title='提示', message='请输入完整信息！')
                 exit()
 
-            # 单项信息获取函数
+            # 单项信息获取
             def single_get(what_type):
                 single = re.findall(what_type, log_content)
                 single[0] = single[0][single[0].find(">") + 1:single[0].rfind("<")]
                 single_out = single[0]
                 return single_out
 
-            # 文件获取及log读取
+            # 文件读取
             log_place = projectPath
-
             log_source = open(log_place, encoding='utf-8')
             log_content = log_source.read()
             log_source.close()
-            # print(log_content)
-
-            # 基础判断
             status = 'Success'
 
-            # 判断创建MHL的操作系统
+            # 判断创建MHL的软件运行的操作系统
             system_mhl = False
             if re.search(r'\\', log_content) != None:
                 system_mhl = True
-            # print(system_mhl)
-
-            # 获取项目信息
-            project_name = projectTitle
-            verified = backups
 
             # 获取当前时间
             local_time = time.strftime('%Y/%m/%d %H:%M', time.localtime(time.time()))
 
-            # 单项信息获取
             # 卷名获取
-            source_name_get = log_place[log_place.rfind('/'):]
-            source_name = source_name_get[1:source_name_get.find('_')]
-            # print(source_name)
+            reel_name_get = log_place[log_place.rfind('/'):]
+            reel_name = reel_name_get[1:reel_name_get.find('_')]
 
             # 开始时间获取
             start_time = single_get(r'<startdate>.*<')
-            print(type(start_time))
             start_time = start_time.replace('T', '\u3000')
             start_time = start_time.replace('Z', '')
             start_time = start_time.replace('-', '/')
-            # print(start_time)
 
             # 结束时间获取
             finish_time = single_get(r'<finishdate>.*<')
             finish_time = finish_time.replace('T', '\u3000')
             finish_time = finish_time.replace('Z', '')
             finish_time = finish_time.replace('-', '/')
-            # print(finish_time)
 
-            # Hash类型获取
+            # Hash类型获取（目前看似乎Kocard只有这一种）
             hash_type = 'xxhash'
 
-            # 数据转换
+            # 数据转换模块
             def hum_convert(value):
                 units = ["B", "KB", "MB", "GB", "TB", "PB"]
                 size = 1024.0
@@ -141,36 +128,29 @@ def genReport():
                         return "%.2f%s" % (value, units[i])
                     value = value / size
 
-            # 正则批量取数据函数
+            # 批量取数据
             def batch_get(which_part):
                 batch = re.findall(which_part, log_content)
-                # print(batch)
                 for i in range(len(batch)):
                     batch[i] = batch[i][batch[i].find(">") + 1:batch[i].rfind('<')]
                 return batch
 
             # 取单个文件大小
             single_size = batch_get(r'<size>.*<')
-            # print(single_size)
             single_size_original = single_size * 1
-            # print(single_size_original)
             total_size = [0]
-            #print(len(single_size_original))
             for i in range(0, len(single_size_original) - 1):
                 total_size[0] += int(single_size_original[i])
 
             # 涉数据转换部分处理
             total_size_out = total_size[0]
             total_size_out = hum_convert(float(total_size_out))
-            # print(total_size_out)
 
             for i in range(0, len(single_size)):
                 single_size[i] = hum_convert(int(single_size[i]))
-            # print(single_size)
 
             # 取文件名
             clip_name = batch_get(r'<file>.*<')
-            print(clip_name)
             simple_name = copy.deepcopy(clip_name)
             if system_mhl == True:
                 for i in range(len(simple_name)):
@@ -184,13 +164,12 @@ def genReport():
 
             # 总文件数获取
             total_files_transferred = len(clip_name)
-            # print(total_files_transferred)
 
             # Hash值
             hash_values = batch_get(r'<xxhash>.*<')
 
             # Clips Overview模块
-            # 获取文件名的后缀名
+            # 获取文件名的后缀名模块
             def get_suffix(filename):
                 # 从字符串中逆向查找.出现的位置
                 pos = filename.rfind('.')
@@ -207,24 +186,21 @@ def genReport():
                 if (get_suffix(clip_name[i]).upper() in video_list) == True:
                     files_count[0] += 1
                     size_count[0] += int(single_size_original[i])
-                    # print(files_count)
                 elif (get_suffix(clip_name[i]).upper() in audio_list) == True:
                     files_count[1] += 1
                     size_count[1] += int(single_size_original[i])
                 else:
                     files_count[2] += 1
                     size_count[2] += int(single_size_original[i])
-            print(size_count)
 
             for i in range(0, 3):
                 size_count[i] = hum_convert(size_count[i])
-            print(size_count)
 
             def formReport():
                 # PDF文件创建
-                pdf = SimpleDocTemplate(source_name + '_' + 'DMT Report' + '.pdf',
+                pdf = SimpleDocTemplate(reel_name + '_' + 'DMT Report' + '.pdf',
                                         pagesize=landscape(A4),
-                                        title=source_name + '_' + 'DMT Report',
+                                        title=reel_name + '_' + 'DMT Report',
                                         rightMargin=45,
                                         leftMargin=45,
                                         topMargin=25,
@@ -232,7 +208,7 @@ def genReport():
 
                 story = []
 
-                # 定义段落Style
+                # 定义Style
                 styleARight = ParagraphStyle(
                     name='Normal',
                     fontSize=12,
@@ -283,11 +259,11 @@ def genReport():
                 story.append(paraTbl)
                 story.append(Spacer(1, 36))
 
-                para = Paragraph(source_name, style=styleB)
+                para = Paragraph(reel_name, style=styleB)
                 story.append(para)
                 story.append(Spacer(1, 32))
 
-                para = Paragraph(project_name, style=styleC)
+                para = Paragraph(projectTitle, style=styleC)
                 story.append(para)
                 story.append(Spacer(1, 5))
 
@@ -340,17 +316,12 @@ def genReport():
                 for i in range(0, int(total_files_transferred)):
                     data = []
                     data.append(simple_name[i])
-                    # print(clip_name[i])
                     data.append(get_suffix(clip_name[i]))
-                    # print(get_suffix(clip_name[i]))
                     data.append(single_size[i])
-                    # print(single_size[i])
                     data.append(hash_type + ': ' + hash_values[i])
-                    # print(hash_type + ': ' + hash_values[i])
-                    data.append(verified)
+                    data.append(backups)
                     data.append(status)
                     tdata.append(data)
-                    print(tdata)
 
                 tblstyle = TableStyle([('LINEBEFORE', (0, 0), (-1, -1), 3,
                                         colors.Color(red=(247.0 / 255), green=(247.0 / 255), blue=(247.0 / 255))),
@@ -374,9 +345,9 @@ def genReport():
             formReport()
         tkinter.messagebox.showinfo(title='提示', message='成功生成报告！')
 
-
+#按键及触发设置
 button = tkinter.Button(root, text='选择路径', command=getPath)
-button.place(x=260, y=140)
+button.place(x=255, y=140)
 
 goOn = tkinter.Button(root, text='生成报告', command=genReport)
 goOn.place(x=345, y=140)
